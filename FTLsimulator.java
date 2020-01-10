@@ -4,7 +4,7 @@
 - Programmer/Developer: Dahab Muhammad Shakeel
 
 - Main Purpose: 1) Implementing the Greedy FTL
-                2) Creating an optimal garbage collector
+                2) Creating an optimal garbage collector provided the future references
 
 - Details:     1) Write Unit is Page (Rgardless of Page's size)
                2) Each Block has 4 Pages
