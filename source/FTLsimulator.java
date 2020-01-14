@@ -22,7 +22,8 @@ import java.util.*;
 
 public class FTLsimulator
 {
-  public static int total_blocks=10; // change the total_blocks if you want -> max total_blocks=9999999 blocks
+  public static int total_blocks=10; // change the total_blocks if you want
+  public static int total_pages=8;
   public static void main(String[] args)
   {
     //Parse addresses from terminal
@@ -54,20 +55,35 @@ public class FTLsimulator
       blocks[i].printer();
     }
 
-    //Creating an L2P table (the same size as given addresses)
-    int L2Ptable[][]=new int [number_of_addresses][3]; // Logical Address | Physical Block Number | Physical Page Number
-    //Read Each Access and Apply Wear Leveling to spread the data on the ssd equally
+    //L2Ptable: Logical Address | Physical Block Number | Physical Page Number
+    int L2Ptable[][]=new int [number_of_addresses][3];
+
+    //Read Each Address and apply greedyFTL -> change this for optimalFTL
     for(int i=0;i<number_of_addresses;i++)
     {
       int address_read=scan.nextInt();
-      //if(old_address())
+
+      if(!old_address(address_read,L2Ptable))
+      {
+
+      }
       //Wear Leveling for new addresses:
-      int possible_block=find_possible_block(blocks,total_blocks);
-      System.out.printf("%d",possible_block);
-      place_page(blocks,possible_block);
+      else
+      {
+        for(int k=0;k<L2Ptable.length;k++)
+        {
+          if(L2Ptable[k][0]==0)//empty entry in the table
+          {
+            L2Ptable[k][0]=address_read;
+            break;
+          }
+        }
 
+        int possible_block=find_possible_block(blocks);
+        System.out.printf("%d",possible_block);
+        place_page(blocks,possible_block,L2Ptable,address_read);
 
-      //update the L2P
+      }
     }
 
 
@@ -84,6 +100,11 @@ public class FTLsimulator
     e.printStackTrace();
   }
 }
+static boolean old_address(int address_read, int L2Ptable[][])
+{
+  
+}
+
 
 /*
 This function finds the best block (index) to place the new written page
@@ -95,7 +116,7 @@ static int find_possible_block(block blocks[], int total_blocks)
 
   for(int i=0;i<total_blocks;i++)
   {
-    for(int j=0;j<8;j++) //each block has 8 pages
+    for(int j=0;j<total_pages;j++) //each block has 8 pages
     {
       if(blocks[i].pages[j]!=0)
       {
@@ -115,17 +136,38 @@ static int find_possible_block(block blocks[], int total_blocks)
   return lowest_index;
 }
 
+
 /*
 This function does the following:
 1)place the page and set its data to 1
 2) update the L2P table
 */
-static void place_page(block blocks[], int possible_block)
+static void place_page(block blocks[], int possible_block,int L2Ptable[][],int address_read)
 {
+  int i=0;
+  for( i=0;i<total_pages;i++) // check each page in the block
+  {
+    if(blocks[possible_block].pages[i]==0) //find an empty page
+    {
+      blocks[possible_block].pages[i]=1;
+      break;
+    }
+  }
 
+  //in L2P Table: find address index and update its block by possible block and its page by i
+  for(int k=0;k<L2Ptable.length;k++)
+  {
+    if(L2Ptable[k][0]==address_read) //found the address entry
+    {
+      L2Ptable[k][1]=possible_block;
+      L2Ptable[k][1]=i;
+      break;
+    }
+  }
 }
 
-}
+
+} // End of FTL class
 
 
 /*
