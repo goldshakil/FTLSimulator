@@ -14,6 +14,7 @@
 4) Addresses are read from a text file called "Addresses.txt"
 5) All Operations are just write operations since read operations do not trigger key mechanisms in the FTL
 6) Assumption: L2P table size is small (same size as the addresses to be read)
+7) Assumption: The number of addresses is smaller than the number of pages
 */
 
 import java.io.*;
@@ -24,7 +25,7 @@ public class FTLsimulator
 {
 
   public static int full_number_of_blocks=4; // half of the blocks are used for over provisioing
-  public static int total_blocks=full_number_of_blocks/2; // change the total_blocks if you want
+  public static int used_blocks=full_number_of_blocks/2; // change the used_blocks if you want
   public static int total_pages=8;
   public static void main(String[] args)
   {
@@ -48,16 +49,27 @@ public class FTLsimulator
     int number_of_addresses=scan.nextInt();
     System.out.println("The addresses to be read "+number_of_addresses);
 
-    //Initialize the Flash Memory with given total_blocks
-    block blocks[]=new block[total_blocks]; //creating null blocks
-    for(int i=0;i<total_blocks;i++)
+    //Initialize the Flash Memory with given used_blocks
+    block blocks[]=new block[full_number_of_blocks]; //creating null blocks
+    for(int i=0;i<full_number_of_blocks;i++)
     {
       blocks[i]=new block(); //initializing each block to zero
-      System.out.printf("block[%d]:\t",i+1);
+      if(i+1>(full_number_of_blocks/2))
+      {
+        blocks[i].set_over_provisioning(1);
+      }
+      else
+      {
+        blocks[i].set_over_provisioning(0);
+      }
+      System.out.printf("block[%d] ",i+1);
+      if(blocks[i].over_provisioning==1)System.out.printf("|O|:\t");
+      else System.out.printf("|U|:\t"); //used
       blocks[i].printer();
     }
 
     //L2Ptable: Logical Address | Physical Block Number | Physical Page Number
+    //table can't be larger than the maximum number of addresses
     int L2Ptable[][]=new int [number_of_addresses][3];
 
     //Read Each Address and apply greedyFTL
@@ -65,9 +77,9 @@ public class FTLsimulator
     {
       int address_read=scan.nextInt();
 
-      if(old_address(address_read,L2Ptable)) //old address
+      if(old_address(address_read,L2Ptable))
       {
-        //Mark the orginal address as stale
+        //Mark the orginal page location as stale
         for(int k=0;k<L2Ptable.length;k++)
         {
           if(L2Ptable[k][0]==address_read)//empty entry in the table
@@ -76,8 +88,11 @@ public class FTLsimulator
             break;
           }
         }
+
         //Place in a new position -> write to a new page and new block -> extreme wear leveling
-        int possible_block=find_possible_block(blocks,total_blocks);
+        int possible_block=find_possible_block(blocks,full_number_of_blocks);
+        place_page(blocks,possible_block,L2Ptable,address_read);
+
 
       }
 
@@ -92,16 +107,24 @@ public class FTLsimulator
           }
         }
 
-        int possible_block=find_possible_block(blocks,total_blocks);
+        int possible_block=find_possible_block(blocks,full_number_of_blocks);
         //  System.out.printf("%d",possible_block);
         place_page(blocks,possible_block,L2Ptable,address_read);
       }
 
       System.out.println("\n\n");
-      for(int y=0;y<total_blocks;y++)
+      //Printing the blocks
+      for(int y=0;y<full_number_of_blocks;y++)
       {
-        System.out.printf("block[%d]:\t",y+1);
+        System.out.printf("block[%d] ",y+1);
+        if(blocks[y].over_provisioning==1)System.out.printf("|O|:\t");
+        else System.out.printf("|U|:\t"); //used
         blocks[y].printer();
+      }
+      //Printing the L2Ptable
+      for(int o=0;o<L2Ptable.length;o++)
+      {
+        System.out.printf("%d\t%d\t%d\n",L2Ptable[o][0],L2Ptable[o][1],L2Ptable[o][2]);
       }
     }
 
@@ -151,20 +174,25 @@ static boolean old_address(int address_read, int L2Ptable[][])
 
 /*
 This function finds the best block (index) to place the new written page -> Wear Leveling
+Note: the best means the block with least number of stale and used pages
 */
-static int find_possible_block(block blocks[], int total_blocks)
+static int find_possible_block(block blocks[], int full_number_of_blocks)
 {
+  //counter_array[][]: Used and Stale Pages | Used(1) or OverProvisioing(0)
+  int counter_array[][]=new int[full_number_of_blocks][2];
 
-  //scan all blocks' pages and return the block with least number of stale and used pages
-  int counter_array[]=new int[total_blocks];
+  for(int i=0;i<full_number_of_blocks;i++)
+  {
+    counter_array[i][1]=blocks[i].over_provisioning;
+  }
 
-  for(int i=0;i<total_blocks;i++)
+  for(int i=0;i<full_number_of_blocks;i++)
   {
     for(int j=0;j<total_pages;j++) //each block has 8 pages
     {
       if(blocks[i].pages[j]!=0)
       {
-        counter_array[i]++;
+        counter_array[i][0]++;
       }
     }
   }
@@ -172,7 +200,7 @@ static int find_possible_block(block blocks[], int total_blocks)
   int lowest_index=0;
   for(int i=0;i<counter_array.length;i++)
   {
-    if(counter_array[i]<counter_array[lowest_index])
+    if(counter_array[i][0]<counter_array[lowest_index][0]&&counter_array[i][1]==0)
     {
       lowest_index=i;
     }
@@ -189,10 +217,10 @@ This function does the following:
 static void place_page(block blocks[], int possible_block,int L2Ptable[][],int address_read)
 {
 
-int i=0;
+  int i=0;
   for( i=0;i<total_pages;i++) // check each page in the block
   {
-    if(blocks[possible_block].pages[i]==0) //find an empty page
+    if(blocks[possible_block].pages[i]==0&&blocks[i].over_provisioning==0) //find an empty page
     {
       blocks[possible_block].pages[i]=1;
       break;
@@ -205,7 +233,7 @@ int i=0;
     if(L2Ptable[k][0]==address_read) //found the address entry
     {
       L2Ptable[k][1]=possible_block;
-      L2Ptable[k][1]=i;
+      L2Ptable[k][2]=i;
       break;
     }
   }
@@ -225,6 +253,12 @@ class block
 
   int over_provisioning; // 0 block in use  1 over provisioing block
   int pages[]= new int[8]; //each block has 8 pages and each page has a bit: 0)free 1)used 2)stale(invalid)
+
+  void set_over_provisioning(int value)
+  {
+    this.over_provisioning=value;
+  }
+
   void printer()
   {
 
