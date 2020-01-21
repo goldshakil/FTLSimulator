@@ -22,7 +22,9 @@ import java.util.*;
 
 public class FTLsimulator
 {
-  public static int total_blocks=10; // change the total_blocks if you want
+
+  public static int full_number_of_blocks=4; // half of the blocks are used for over provisioing
+  public static int total_blocks=full_number_of_blocks/2; // change the total_blocks if you want
   public static int total_pages=8;
   public static void main(String[] args)
   {
@@ -58,17 +60,28 @@ public class FTLsimulator
     //L2Ptable: Logical Address | Physical Block Number | Physical Page Number
     int L2Ptable[][]=new int [number_of_addresses][3];
 
-    //Read Each Address and apply greedyFTL -> change this for optimalFTL
+    //Read Each Address and apply greedyFTL
     for(int i=0;i<number_of_addresses;i++)
     {
       int address_read=scan.nextInt();
 
-      if(!old_address(address_read,L2Ptable))
+      if(old_address(address_read,L2Ptable)) //old address
       {
+        //Mark the orginal address as stale
+        for(int k=0;k<L2Ptable.length;k++)
+        {
+          if(L2Ptable[k][0]==address_read)//empty entry in the table
+          {
+            set_page_stale(L2Ptable[k][1],L2Ptable[k][2],blocks);
+            break;
+          }
+        }
+        //Place in a new position -> write to a new page and new block -> extreme wear leveling
+        int possible_block=find_possible_block(blocks,total_blocks);
 
       }
-      //Wear Leveling for new addresses:
-      else
+
+      else //new address
       {
         for(int k=0;k<L2Ptable.length;k++)
         {
@@ -79,10 +92,16 @@ public class FTLsimulator
           }
         }
 
-        int possible_block=find_possible_block(blocks);
-        System.out.printf("%d",possible_block);
+        int possible_block=find_possible_block(blocks,total_blocks);
+        //  System.out.printf("%d",possible_block);
         place_page(blocks,possible_block,L2Ptable,address_read);
+      }
 
+      System.out.println("\n\n");
+      for(int y=0;y<total_blocks;y++)
+      {
+        System.out.printf("block[%d]:\t",y+1);
+        blocks[y].printer();
       }
     }
 
@@ -100,17 +119,42 @@ public class FTLsimulator
     e.printStackTrace();
   }
 }
-static boolean old_address(int address_read, int L2Ptable[][])
+
+/*
+This function set the page to stale state (dirty)
+*/
+static void set_page_stale(int block_number,int page_number,block blocks[])
 {
-  
+  blocks[block_number].pages[page_number]=2;
 }
 
 
 /*
-This function finds the best block (index) to place the new written page
+This function checks wether the address has been accesses before or not:
+1) true -> OLD (Accessed Before)
+2) False -> NEW (Wasn't accessed before)
+*/
+static boolean old_address(int address_read, int L2Ptable[][])
+{
+  boolean return_value=false;
+  for(int i=0;i<L2Ptable.length;i++)
+  {
+    if(address_read==L2Ptable[i][0])
+    {
+      return_value=true;
+      break;
+    }
+  }
+  return return_value;
+}
+
+
+/*
+This function finds the best block (index) to place the new written page -> Wear Leveling
 */
 static int find_possible_block(block blocks[], int total_blocks)
 {
+
   //scan all blocks' pages and return the block with least number of stale and used pages
   int counter_array[]=new int[total_blocks];
 
@@ -144,7 +188,8 @@ This function does the following:
 */
 static void place_page(block blocks[], int possible_block,int L2Ptable[][],int address_read)
 {
-  int i=0;
+
+int i=0;
   for( i=0;i<total_pages;i++) // check each page in the block
   {
     if(blocks[possible_block].pages[i]==0) //find an empty page
@@ -177,9 +222,12 @@ static void place_page(block blocks[], int possible_block,int L2Ptable[][],int a
 */
 class block
 {
+
+  int over_provisioning; // 0 block in use  1 over provisioing block
   int pages[]= new int[8]; //each block has 8 pages and each page has a bit: 0)free 1)used 2)stale(invalid)
   void printer()
   {
+
     for(int i=0;i<8;i++)
     {
       System.out.printf("%d\t",this.pages[i]);
