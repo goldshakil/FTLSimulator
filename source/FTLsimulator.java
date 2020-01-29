@@ -14,7 +14,8 @@
 4) Addresses are read from a text file called "Addresses.txt"
 5) All Operations are just write operations since read operations do not trigger key mechanisms in the FTL
 6) Assumption: L2P table size is small (same size as the addresses to be read)
-7) Assumption: The number of addresses is smaller than the number of pages
+7) Assumption: The number of addresses is smaller than the number of total number of pages
+8) Assumption: Garabge collection only occurs when the used blocks are full
 */
 
 import java.io.*;
@@ -25,7 +26,7 @@ public class FTLsimulator
 {
 
   public static int full_number_of_blocks=4; // half of the blocks are used for over provisioing
-  public static int used_blocks=full_number_of_blocks/2; // change the used_blocks if you want
+  public static int used_blocks=full_number_of_blocks/2; // change the used_blocks if you want -> 10% change
   public static int total_pages=8;
   public static void main(String[] args)
   {
@@ -91,7 +92,11 @@ public class FTLsimulator
 
         //Place in a new position -> write to a new page and new block -> extreme wear leveling
         int possible_block=find_possible_block(blocks,full_number_of_blocks);
-        place_page(blocks,possible_block,L2Ptable,address_read);
+        if(!place_page(blocks,possible_block,L2Ptable,address_read))
+        {
+          //Garabge Collection
+
+        }
 
 
       }
@@ -108,8 +113,13 @@ public class FTLsimulator
         }
 
         int possible_block=find_possible_block(blocks,full_number_of_blocks);
-        //  System.out.printf("%d",possible_block);
-        place_page(blocks,possible_block,L2Ptable,address_read);
+
+        if(!place_page(blocks,possible_block,L2Ptable,address_read))
+        {
+          //Garabge Collection
+          garbage_collection();
+
+        }
       }
 
       System.out.println("\n\n");
@@ -144,6 +154,17 @@ public class FTLsimulator
 }
 
 /*
+This function does the following:
+1) Choose Victim Based on Greedy Policy -> block with highest number of stale pages -> THIS CAN BE FIXED FOR ANOTHER POLICY
+2) Copy valid data to a an over_provisioning block with least number of writes
+3)
+*/
+static void garbage_collection()
+{
+
+}
+
+/*
 This function set the page to stale state (dirty)
 */
 static void set_page_stale(int block_number,int page_number,block blocks[])
@@ -174,33 +195,14 @@ static boolean old_address(int address_read, int L2Ptable[][])
 
 /*
 This function finds the best block (index) to place the new written page -> Wear Leveling
-Note: the best means the block with least number of stale and used pages
+Note: the best means the block with least number number of writes to it
 */
 static int find_possible_block(block blocks[], int full_number_of_blocks)
 {
-  //counter_array[][]: Used and Stale Pages | Used(1) or OverProvisioing(0)
-  int counter_array[][]=new int[full_number_of_blocks][2];
-
-  for(int i=0;i<full_number_of_blocks;i++)
-  {
-    counter_array[i][1]=blocks[i].over_provisioning;
-  }
-
-  for(int i=0;i<full_number_of_blocks;i++)
-  {
-    for(int j=0;j<total_pages;j++) //each block has 8 pages
-    {
-      if(blocks[i].pages[j]!=0)
-      {
-        counter_array[i][0]++;
-      }
-    }
-  }
-
   int lowest_index=0;
-  for(int i=0;i<counter_array.length;i++)
+  for(int i=0;i<full_number_of_blocks;i++)
   {
-    if(counter_array[i][0]<counter_array[lowest_index][0]&&counter_array[i][1]==0)
+    if(blocks[i].number_writes<blocks[lowest_index].number_writes&&blocks[i].over_provisioning==0)
     {
       lowest_index=i;
     }
@@ -213,30 +215,38 @@ static int find_possible_block(block blocks[], int full_number_of_blocks)
 This function does the following:
 1)place the page and set its data to 1
 2) update the L2P table
+3) determine GC need: if the best block has full pages
 */
-static void place_page(block blocks[], int possible_block,int L2Ptable[][],int address_read)
+static boolean place_page(block blocks[], int possible_block,int L2Ptable[][],int address_read)
 {
+  boolean return_value=false;
 
   int i=0;
   for( i=0;i<total_pages;i++) // check each page in the block
   {
-    if(blocks[possible_block].pages[i]==0&&blocks[i].over_provisioning==0) //find an empty page
+
+    if(blocks[possible_block].pages[i]==0&&blocks[possible_block].over_provisioning==0) //find an empty page
     {
       blocks[possible_block].pages[i]=1;
+      blocks[possible_block].number_writes++;
+      return_value=true;
       break;
     }
   }
-
   //in L2P Table: find address index and update its block by possible block and its page by i
-  for(int k=0;k<L2Ptable.length;k++)
+  if(return_value==true)
   {
-    if(L2Ptable[k][0]==address_read) //found the address entry
+    for(int k=0;k<L2Ptable.length;k++)
     {
-      L2Ptable[k][1]=possible_block;
-      L2Ptable[k][2]=i;
-      break;
+      if(L2Ptable[k][0]==address_read) //found the address entry
+      {
+        L2Ptable[k][1]=possible_block;
+        L2Ptable[k][2]=i;
+        break;
+      }
     }
   }
+  return return_value;
 }
 
 
@@ -250,7 +260,7 @@ static void place_page(block blocks[], int possible_block,int L2Ptable[][],int a
 */
 class block
 {
-
+  int number_writes; //keeps track of how many writes have been committed to the block
   int over_provisioning; // 0 block in use  1 over provisioing block
   int pages[]= new int[8]; //each block has 8 pages and each page has a bit: 0)free 1)used 2)stale(invalid)
 
