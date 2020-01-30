@@ -117,7 +117,8 @@ public class FTLsimulator
         if(!place_page(blocks,possible_block,L2Ptable,address_read))
         {
           //Garabge Collection
-          garbage_collection();
+          garbage_collection(blocks,full_number_of_blocks,L2Ptable);
+          //Place Page
 
         }
       }
@@ -134,16 +135,9 @@ public class FTLsimulator
       //Printing the L2Ptable
       for(int o=0;o<L2Ptable.length;o++)
       {
-        System.out.printf("%d\t%d\t%d\n",L2Ptable[o][0],L2Ptable[o][1],L2Ptable[o][2]);
+        if(L2Ptable[o][0]!=0) System.out.printf("%d\t%d\t%d\n",L2Ptable[o][0],L2Ptable[o][1],L2Ptable[o][2]);
       }
     }
-
-
-
-
-
-
-
 
 
   }catch(Exception e)
@@ -153,14 +147,73 @@ public class FTLsimulator
   }
 }
 
+static int find_corresponding_address(int victim_replaced_block,int copied_page, int L2Ptable[][])
+{
+  
+
+}
+
 /*
 This function does the following:
 1) Choose Victim Based on Greedy Policy -> block with highest number of stale pages -> THIS CAN BE FIXED FOR ANOTHER POLICY
-2) Copy valid data to a an over_provisioning block with least number of writes
-3)
+2) Copy valid data to a an over_provisioning block with least number of writes -> No wear levelling for now
+3) Change over_provisioning status
+4) Erase original block
+5) Update L2P table
 */
-static void garbage_collection()
+static void garbage_collection(block blocks[],int full_number_of_blocks,int L2Ptable[][])
 {
+  //Step 1:
+  //counter_array[][]: Used and Stale Pages | Used(1) or OverProvisioing(0)
+  int counter_array[][]=new int[full_number_of_blocks][2];
+  for(int i=0;i<full_number_of_blocks;i++)
+  {
+    counter_array[i][1]=blocks[i].over_provisioning;
+  }
+
+  for(int i=0;i<full_number_of_blocks;i++)
+  {
+    for(int j=0;j<total_pages;j++) //each block has 8 pages
+    {
+      if(blocks[i].pages[j]==2)
+      {
+        counter_array[i][0]++;
+      }
+    }
+  }
+
+  int victim_replaced_block=0;
+  for(int i=0;i<counter_array.length;i++)
+  {
+    if(counter_array[i][0]>counter_array[victim_replaced_block][0]&&counter_array[i][1]==0)
+    {
+      victim_replaced_block=i;
+    }
+  }
+
+  //Step2:
+  int new_replacing_block=0;
+  for(int i=0;i<full_number_of_blocks;i++)
+  {
+    if(blocks[i].over_provisioning== 1)
+    {
+      new_replacing_block=i;
+      break;
+    }
+  }
+  for(int i=0;i<total_pages;i++)
+  {
+    if(blocks[victim_replaced_block].pages[i]==1)//valid data
+    {
+      int LogicalAddress=find_corresponding_address(victim_replaced_block,i,L2Ptable);
+
+    }
+  }
+
+
+
+
+
 
 }
 
