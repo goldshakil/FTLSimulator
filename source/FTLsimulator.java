@@ -13,9 +13,14 @@
 3) The FTLsimulator translates a logical address read from the text file and translates it to a physical one (Wear Leveling)
 4) Addresses are read from a text file called "Addresses.txt"
 5) All Operations are just write operations since read operations do not trigger key mechanisms in the FTL
-6) Assumption: L2P table size is small (same size as the addresses to be read)
-7) Assumption: The number of addresses is smaller than the number of total number of pages
-8) Assumption: Garabge collection only occurs when the used blocks are full
+
+- Assumptions:
+1) L2P table size is small (same size as the addresses to be read)
+2) The number of addresses is smaller than the number of total number of pages
+3) Garabge collection only occurs when the used blocks are full -> MODIFIABLE (For now Switch Merge is Used)
+4) A Single Block is Selected
+5) A Modified Page-Level mapping is used (L2P stores both Block and Page number)
+6) There is no buffer involved. Thus, writes are directly on SSD
 */
 
 import java.io.*;
@@ -146,12 +151,23 @@ public class FTLsimulator
     e.printStackTrace();
   }
 }
-
+/*
+This function finds the opposite of Logical2Physical Mapping
+*/
 static int find_corresponding_address(int victim_replaced_block,int copied_page, int L2Ptable[][])
 {
-  
+  int address=0;
+  for(int i=0;i<L2Ptable.length;i++)
+  {
+    if(L2Ptable[i][1]==victim_replaced_block&&L2Ptable[i][2]==copied_page)
+    {
+      address=L2Ptable[i][0];
+    }
+  }
+  return address;
 
 }
+
 
 /*
 This function does the following:
@@ -191,7 +207,7 @@ static void garbage_collection(block blocks[],int full_number_of_blocks,int L2Pt
     }
   }
 
-  //Step2:
+  //Step 2 && 5:
   int new_replacing_block=0;
   for(int i=0;i<full_number_of_blocks;i++)
   {
@@ -201,11 +217,21 @@ static void garbage_collection(block blocks[],int full_number_of_blocks,int L2Pt
       break;
     }
   }
-  for(int i=0;i<total_pages;i++)
+  for(int i=0;i<total_pages;i++) //Victim Block Pages
   {
-    if(blocks[victim_replaced_block].pages[i]==1)//valid data
+    if(blocks[victim_replaced_block].pages[i]==1)//Valid data
     {
       int LogicalAddress=find_corresponding_address(victim_replaced_block,i,L2Ptable);
+      for(int j=0;j<total_pages;j++) //New Block Pages
+      {
+        if(blocks[new_replacing_block].pages[j]==0)
+        {
+          blocks[new_replacing_block].pages[j]=1;
+          blocks[new_replacing_block].number_writes++;
+          break;
+        }
+      }
+
 
     }
   }
