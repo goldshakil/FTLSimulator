@@ -30,7 +30,7 @@ import java.util.*;
 public class FTLsimulator
 {
 
-  public static int full_number_of_blocks=4; // half of the blocks are used for over provisioing
+  public static int full_number_of_blocks=8; // half of the blocks are used for over provisioing
   public static int used_blocks=full_number_of_blocks/2; // change the used_blocks if you want -> 10% change
   public static int total_pages=8;
   public static void main(String[] args)
